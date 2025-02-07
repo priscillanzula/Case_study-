@@ -1,0 +1,86 @@
+import dash
+from dash import dcc, html, Input, Output
+import pandas as pd
+import plotly.express as px
+
+# Load and clean the dataset
+file_path = "Case_study.csv"  # Replace with your file path
+data = pd.read_csv(file_path)
+
+# Data Cleaning
+data['DATE'] = pd.to_datetime(data['DATE'], errors='coerce')
+data['UNIT PRICE'] = data['UNIT PRICE'].replace(',', '', regex=True).astype(float)
+data['TOTAL VALUE'] = data['QUANTITY'] * data['UNIT PRICE']
+
+# Create Month-Year column
+data['Month-Year'] = data['DATE'].dt.to_period('M').astype(str)
+
+# Aggregate Data for Insights
+category_summary = data.groupby('ANONYMIZED CATEGORY').agg(
+    Total_Quantity=('QUANTITY', 'sum'),
+    Total_Value=('TOTAL VALUE', 'sum')
+).reset_index()
+
+top_products = data.groupby('ANONYMIZED PRODUCT').agg(
+    Total_Quantity=('QUANTITY', 'sum'),
+    Total_Value=('TOTAL VALUE', 'sum')
+).reset_index().nlargest(5, 'Total_Value')
+
+top_businesses = data.groupby('ANONYMIZED BUSINESS').agg(
+    Total_Quantity=('QUANTITY', 'sum'),
+    Total_Value=('TOTAL VALUE', 'sum')
+).reset_index().nlargest(5, 'Total_Value')
+
+sales_trends = data.groupby('Month-Year').agg(
+    Total_Quantity=('QUANTITY', 'sum'),
+    Total_Value=('TOTAL VALUE', 'sum')
+).reset_index()
+
+# Create Dash App
+app = dash.Dash(__name__)
+
+app.layout = html.Div([
+    html.H1("Sales Dashboard", style={'textAlign': 'center'}),
+    
+    # Total Quantity and Value by Category
+    html.H2("Total Quantity and Value by Category"),
+    dcc.Graph(
+        id='category-bar',
+        figure=px.bar(category_summary, x='ANONYMIZED CATEGORY', y=['Total_Quantity', 'Total_Value'],
+                      barmode='group', title="Total Quantity and Value by Category")
+    ),
+
+    # Top Performing Products
+    html.H2("Top Performing Products (by Value)"),
+    dcc.Graph(
+        id='top-products',
+        figure=px.bar(top_products, x='ANONYMIZED PRODUCT', y='Total_Value', 
+                      title="Top 5 Products by Value")
+    ),
+    
+    # Top Performing Businesses
+    html.H2("Top Performing Businesses (by Value)"),
+    dcc.Graph(
+        id='top-businesses',
+        figure=px.bar(top_businesses, x='ANONYMIZED BUSINESS', y='Total_Value', 
+                      title="Top 5 Businesses by Value")
+    ),
+
+    # Time Series of Sales Trends
+    html.H2("Sales Trends Over Time"),
+    dcc.Graph(
+        id='sales-trends',
+        figure=px.line(sales_trends, x='Month-Year', y=['Total_Quantity', 'Total_Value'],
+                       title="Sales Trends Over Time")
+    ),
+    
+    # Customer Segmentation Summary
+    html.H2("Customer Segmentation Summary"),
+    html.Div(id='customer-segmentation-summary', children=[
+        html.P("Segmentation of customers into High, Medium, and Low value based on purchase behavior will be displayed here.")
+    ])
+])
+
+# Run the app
+if __name__ == '__main__':
+    app.run_server(debug=True)
